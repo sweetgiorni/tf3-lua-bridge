@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Copy the publishable part of the mod into the game's staging area, as <staging_area>/<modId>/.
 # Usage: tools/package.sh [staging-area]   (default: TF3_STAGING_AREA, else the Steam userdata staging_area)
-# The mod is mod.json, strings.json, _metadata/ and content/ (the upload validation rejects a LICENSE file); everything else in the repo (tools/, docs,
+# The mod is mod.json, strings.json, _metadata/ and content/, plus the repo's LICENSE as license.txt (upload
+# validation rejects a file named LICENSE: lowercase names with an extension only); everything else in the repo (tools/, docs,
 # .git) stays out, so adding files under content/ needs no change here. Re-running updates the copy and
 # removes files deleted from the source. _metadata/mod.io_fileid.txt, written by the game on the first
 # upload, is kept.
@@ -27,7 +28,9 @@ bad="$(cd "$ROOT" && find content _metadata -type f \( -name '*.py' -o -name '*.
 rsync -a --delete --delete-excluded --filter='P _metadata/mod.io_fileid.txt' \
     --include=/mod.json --include=/strings.json --include='/_metadata/***' --include='/content/***' --exclude='*' \
     "$ROOT/" "$DEST/"
+cp "$ROOT/LICENSE" "$DEST/license.txt"
 
+cmp "$ROOT/LICENSE" "$DEST/license.txt"
 for e in mod.json strings.json _metadata content; do
     [ -e "$ROOT/$e" ] || continue
     diff -rq --exclude mod.io_fileid.txt "$ROOT/$e" "$DEST/$e"

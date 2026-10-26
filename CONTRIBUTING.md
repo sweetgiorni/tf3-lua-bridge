@@ -2,7 +2,7 @@
 
 ## Layout
 
-- `mod.json`, `strings.json`, `_metadata/`, `content/`: the mod itself and the only files that are published.
+- `mod.json`, `strings.json`, `_metadata/`, `content/`: the mod itself. With `LICENSE` (published as `license.txt`) they are the only files that are published.
 - `tools/`: the client, MCP server, tests, packaging and cover scripts. Not part of the package.
 - `PROTOCOL.md`: the wire protocol.
 
@@ -19,7 +19,7 @@ Run from the repository root. The offline tests need Lua 5.4 and Python 3.
 
 ## Packaging
 
-`tools/package.sh [staging-area]` (needs bash and rsync) copies the mod (`mod.json`, `strings.json`, `_metadata/`, `content/`) to `<staging_area>/lua_bridge/` and verifies the copy. The default staging area is `<Steam>/userdata/*/3493540/local/staging_area`; override it with the argument or `TF3_STAGING_AREA`. Everything else in the repository stays out, and the script refuses to package `.py`, `.sh`, `.bat` or `.exe` files under `content/` or `_metadata/`. Re-running updates the copy and keeps `_metadata/mod.io_fileid.txt`.
+`tools/package.sh [staging-area]` (needs bash and rsync) copies the mod (`mod.json`, `strings.json`, `_metadata/`, `content/`, plus `LICENSE` as `license.txt`) to `<staging_area>/lua_bridge/` and verifies the copy. The default staging area is `<Steam>/userdata/*/3493540/local/staging_area`; override it with the argument or `TF3_STAGING_AREA`. Everything else in the repository stays out, and the script refuses to package `.py`, `.sh`, `.bat` or `.exe` files under `content/` or `_metadata/`. Re-running updates the copy and keeps `_metadata/mod.io_fileid.txt`.
 
 ## Cover image
 
