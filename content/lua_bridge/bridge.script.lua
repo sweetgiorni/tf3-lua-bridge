@@ -130,14 +130,21 @@ local function disconnect(reason)
 	if reason then say("disconnected: " .. reason) end
 end
 
--- The bridge talks through files in %TEMP%, so it only runs on Windows (the path separator tells); anywhere else, or
--- where io is unavailable, it stays idle. Not api.util.string2Platform: an unknown name is a fatal engine assertion.
+-- The bridge talks through files, so it stays idle where there is no file access (consoles, or io unavailable).
+-- Not api.util.string2Platform: an unknown name is a fatal engine assertion.
 local function supported()
 	if G.supported == nil then
-		G.supported = hasIo and package.config:sub(1, 1) == "\\"
-		if not G.supported then say("Lua Bridge only works on Windows; staying idle") end
+		local ok, console = pcall(api.util.isConsoleMode)
+		G.supported = hasIo and not (ok and console)
+		if not G.supported then say("Lua Bridge needs file access, which is not available here; staying idle") end
 	end
 	return G.supported
+end
+
+-- %TEMP% on Windows; elsewhere the same order Python's tempfile uses, so the client finds the same folder.
+local function tempRoot(sep)
+	if sep == "\\" then return os.getenv("TEMP") or os.getenv("TMP") end
+	return os.getenv("TMPDIR") or os.getenv("TEMP") or os.getenv("TMP") or "/tmp"
 end
 
 local function connect()
@@ -145,9 +152,9 @@ local function connect()
 	local now = clock()
 	if now < G.nextOpen then return false end
 	G.nextOpen = now + PROBE_SEC
-	local tmp = os.getenv("TEMP") or os.getenv("TMP")
-	if not tmp then return false end
 	local sep = package.config:sub(1, 1)
+	local tmp = tempRoot(sep)
+	if not tmp then return false end
 	local dir = tmp .. sep .. DIR_NAME .. sep
 	local inF = io.open(dir .. IN_NAME, "rb")
 	if not inF then return false end

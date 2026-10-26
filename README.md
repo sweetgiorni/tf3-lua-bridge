@@ -11,11 +11,11 @@ With it you can, without leaving your editor:
 
 The mod only provides the connection. Nothing happens until a client connects.
 
-**Windows only.** The mod and the tools talk through files in `%TEMP%\tf3_bridge`; the mod stays idle on other platforms.
+**Platforms:** developed and tested on Windows (including driving it from WSL). Linux and macOS should work, since the bridge only uses files in the temp folder (`%TEMP%\tf3_bridge` on Windows, `$TMPDIR/tf3_bridge` or `/tmp/tf3_bridge` elsewhere), but they are untested: reports welcome. The mod stays idle on consoles, which have no file access.
 
 ## Security
 
-While the mod is enabled, any program running as you that can write to `%TEMP%\tf3_bridge` can run Lua in your game. Enable the mod only while you are developing.
+While the mod is enabled, any program running as you that can write to the bridge folder can run Lua in your game. Enable the mod only while you are developing.
 
 The mod option "Lua access for requests" controls what that Lua can reach:
 
@@ -52,7 +52,7 @@ Tools it offers:
 | `status` | Connection state, access level, game build |
 | `reload_game` | Destructive: refresh mods and reload the current save |
 
-If your Steam library is not in `C:\Program Files (x86)\Steam`, set `TF3_INSTALL` to the game folder.
+If your Steam library is not in its default location, set `TF3_INSTALL` to the game folder.
 
 ## Command line
 

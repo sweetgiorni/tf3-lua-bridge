@@ -21,17 +21,37 @@ LINE_LIMIT = 8 * 1024 * 1024
 BIN = getattr(os, "O_BINARY", 0)  # Windows would otherwise translate newlines on every os.open'ed file
 
 
+def is_wsl() -> bool:
+    try:
+        return "microsoft" in open("/proc/version").read().lower()
+    except OSError:
+        return False
+
+
 def default_dir() -> str:
-    """The bridge folder: %TEMP%\\tf3_bridge (the mod looks there). TF3_BRIDGE_DIR overrides it."""
+    """The bridge folder the mod looks in: <temp>/tf3_bridge, with the same temp folder the game uses. TF3_BRIDGE_DIR
+    overrides it."""
     if os.environ.get("TF3_BRIDGE_DIR"):
         return os.environ["TF3_BRIDGE_DIR"]
     if os.name == "nt":
         return os.path.join(os.environ.get("TEMP") or os.environ["TMP"], "tf3_bridge")
+    if not is_wsl():  # Linux or macOS, the game and this client share a temp folder
+        import tempfile
+
+        return os.path.join(tempfile.gettempdir(), "tf3_bridge")
     # Linux inside WSL: the game's %TEMP% as seen from here. No stdin: when we are an MCP stdio proxy, cmd.exe would
     # otherwise read (and swallow) the client's messages.
     win = subprocess.run(["cmd.exe", "/c", "echo %TEMP%"], capture_output=True, text=True, cwd="/mnt/c", stdin=subprocess.DEVNULL).stdout.strip()
     path = subprocess.run(["wslpath", win], capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip()
     return os.path.join(path, "tf3_bridge")
+
+
+def ensure_dir(path: str) -> None:
+    """Create the bridge folder private to this user (the files let whoever writes them run Lua in the game). On
+    Linux and macOS, where the temp folder is shared, refuse a folder somebody else created."""
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    if os.name == "posix" and not os.path.abspath(path).startswith("/mnt/") and os.stat(path).st_uid != os.getuid():
+        raise PermissionError(f"{path} belongs to another user; set TF3_BRIDGE_DIR or remove it")
 
 
 class BridgeError(Exception):
@@ -54,7 +74,7 @@ class Bridge:
 
     # -- lifecycle ---------------------------------------------------------------------------------------------
     def open(self, timeout: float = 10.0) -> dict:
-        os.makedirs(self.dir, exist_ok=True)
+        ensure_dir(self.dir)
         try:
             fd = os.open(self._lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL | BIN)
         except FileExistsError:

@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Literal
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from bridge_cli import BIN, default_dir  # noqa: E402
+from bridge_cli import BIN, default_dir, ensure_dir, is_wsl  # noqa: E402
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: E402
 from mcp.server.mcpserver.exceptions import ToolError  # noqa: E402
@@ -49,8 +49,12 @@ PORT = int(os.environ.get("LUA_BRIDGE_MCP_PORT", "8765"))
 TOKEN_FILE = Path(os.environ.get("LUA_BRIDGE_MCP_TOKEN_FILE", "~/.config/lua-bridge-mcp/token")).expanduser()
 if os.name == "nt":
     STEAM = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Steam"
-else:  # WSL
+elif is_wsl():  # the game runs on the Windows side
     STEAM = Path("/mnt/c/Program Files (x86)/Steam")
+elif sys.platform == "darwin":
+    STEAM = Path.home() / "Library" / "Application Support" / "Steam"
+else:
+    STEAM = Path.home() / ".local" / "share" / "Steam"
 GAME_DIR = Path(os.environ.get("TF3_INSTALL", STEAM / "steamapps" / "common" / "Transport Fever 3"))
 
 
@@ -92,7 +96,7 @@ class GameBridge:
 
     # -- the bridge lock: one server per game ---------------------------------------------------------------------
     def acquire_lock(self) -> None:
-        os.makedirs(self.dir, exist_ok=True)
+        ensure_dir(self.dir)
         for _ in range(2):
             try:
                 fd = os.open(self.lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | BIN)

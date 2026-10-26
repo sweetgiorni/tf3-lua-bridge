@@ -1,5 +1,6 @@
 -- Runs the real bridge.script.lua outside the game with stubbed game globals, so the protocol can be tested offline.
--- Usage: TEMP=<dir> mise exec -- lua tools/tests/bridge_harness.lua <seconds> [full]
+-- Usage: TEMP=<dir> mise exec -- lua tools/tests/bridge_harness.lua <seconds> [full|restricted] [Linux|Console]
+-- (default: simulates Windows paths; Linux uses real / paths; Console must stay idle)
 local seconds = tonumber(arg[1]) or 30
 local base = "content/lua_bridge/"
 package.path = base .. "?.lua;" .. package.path
@@ -15,7 +16,7 @@ debugPrint = function(...) print(...) end
 getBuildVersion = function() return "harness" end
 local now = 0 -- simulated application time, one 4 ms frame per loop (os.clock is CPU time and would stand still)
 api = {
-	util = { getApplicationTime = function() return now end },
+	util = { getApplicationTime = function() return now end, isConsoleMode = function() return arg[3] == "Console" end },
 	engine = { config = { getModParams = function() return { lua_bridge = { evalAccess = arg[2] == "full" and 2 or 1 } } end } },
 }
 app, game = {}, {}
