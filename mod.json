@@ -1,0 +1,23 @@
+{
+	"modId": "lua_bridge",
+	"revision": 1,
+	"severityAdd": "None",
+	"severityRemove": "Warning",
+	"visible": true,
+	"dependencies": null,
+	"incompatibilities": null,
+	"options": null,
+	"preRunScript": { "fileName": "" },
+	"runScript": { "fileName": "" },
+	"postRunScript": { "fileName": "" },
+	"params": [
+		{
+			"key": "evalAccess",
+			"name": "param_evalAccess_name",
+			"tooltip": "param_evalAccess_tooltip",
+			"uiType": "Button",
+			"values": ["param_restricted", "param_full"],
+			"defaultIndex": 0
+		}
+	]
+}

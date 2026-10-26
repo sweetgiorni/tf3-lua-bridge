@@ -1,0 +1,35 @@
+# Lua Bridge protocol
+
+Wire protocol, engine eval and security notes for the `lua_bridge` mod. Client: `tools/bridge_cli.py`; MCP server: `tools/lua_bridge_mcp.py`.
+
+## Wire protocol (version 1)
+
+Folder `%TEMP%\tf3_bridge\` (WSL: `/mnt/c/Users/<user>/AppData/Local/Temp/tf3_bridge/`), created by the client. Both files are newline-delimited JSON, append-only, never truncated, never deleted while the game runs (Windows would refuse). `%TEMP%` is private to the user (ACL: SYSTEM, Administrators, user).
+
+- **One connection, many sessions.** One process (the MCP server) owns `bridge.lock`, created with an exclusive create (`O_CREAT|O_EXCL`) and deleted on exit; if it exists the client reports "bridge in use". A crashed process leaves the lock for the user to delete. With one writer per file there is no rule about how it chunks its writes. Concurrent Claude sessions are the client's business: it serializes them onto this one connection and tells them apart with `context` (below); the mod knows nothing about sessions.
+- **Framing.** A request is one JSON object on one line ending in `\n`. The mod only acts on complete lines and keeps the fragment after the last newline in a buffer, so the client may split, batch or pipeline writes arbitrarily. A client starts a session by writing a bare `\n` to close off any torn line from a crashed predecessor; empty lines are ignored. Lines over 8 MiB are rejected; unparseable lines get an error response without `id`.
+- **Handshake.** When the mod first sees `in.jsonl` it starts reading at the END of the file (history belongs to earlier runs), so the client sends `{"op":"hello","context":C}` repeatedly (about once a second) until it sees the reply `{"op":"hello","context":C,"ok":true,"version":1,"run":<nonce>,"state":"gui","access":"restricted"|"full","build":...}`. The client records the end of `out.jsonl` before sending and reads only from there. A new `run` means the mod was reloaded (any pending requests were lost).
+- **Requests.** Every request has `op` and optionally `context`: any JSON value (the reference client uses `{"session":...,"seq":...}`), which the mod copies into the response untouched, success or error, and never interprets. There is no `id` field; correlate with `context`. Keep it small and shallow (the response encoder stops at depth 8). Decoded numbers are doubles, so integers above 2^53 do not round-trip. GUI responses come in request order; engine answers arrive when the engine has produced them, possibly after later GUI answers, so always correlate by `context`. Without `context` the response has none. The hello reply lists `states: ["gui","engine"]`.
+  - `ping` -> `{"op":"ping","ok":true,"time":<app seconds>}`
+  - `eval` with `code` (string) -> tries `return <code>` first, then `<code>` as statements. Optional `maxDepth` (default 6) and `maxItems` (default 500 per table). Success: `{"id","ok":true,"result":<JSON>,"ms":<n>,"log":[...]?,"truncated":true?}`; `log` holds `print` output (at most 100 lines of 1000 chars). Failure: `{"id","ok":false,"kind":"syntax"|"runtime","error":...,"traceback":...}`. Multiple return values become an array. Functions, userdata, cycles and over-deep tables become strings; results over 1 MiB are retried at depth 2 / 50 items and flagged `truncated`.
+  - `eval` with `"state":"engine"` runs the code in an engine Lua state instead (see the Engine eval section). `state` may be `"gui"` (default) or `"engine"`; anything else -> `unsupported_state`.
+  - anything else -> `{"ok":false,"error":"unknown_op: ..."}`.
+- **Eval environment.** One persistent table per game run, so `x = 1` is visible to the next eval. Setting `evalAccess` (mod option, default Restricted) runs request code in a table holding only a whitelist: `api`, `app`, `game`, the basic functions (`pairs`, `pcall`, `tostring`, `setmetatable`, ...), `math`, `string`, `table`, `bit32`, `coroutine`, the game's `debugPrint`/`toString`/`serializeStr`/`orderedPairs` helpers, and `os` reduced to `time, clock, date, difftime`. So `require`, `package`, `debug`, `load`, `io` and `os.getenv` are absent. It does NOT limit the game API: `app` and `api.cmd` can still quit the game, delete savegames and userdata files, or change the map. It is a guard against accidents, not a security boundary. Full gives `_G` through `__index`.
+- **Budgets.** At most 200 lines read and about 4 ms of requests per frame (a single request always runs, even a slow one, so a long eval stalls that frame); queue capped at 1000 (`queue_full`). An idle poll with no client costs one failed `io.open` every 0.5 s; with a client, one EOF read per frame (about 2 us).
+- **Resilience.** If the input file shrinks below the read position the mod rewinds to 0; 5 consecutive errors disconnect it for 30 s.
+
+## Engine eval
+
+`eval` with `"state":"engine"` needs no files. The GUI side sends a script event named `LuaBridgeRequest` (`api.cmd.sendCommand(api.cmd.makeScriptingSendEventCmd("", "LuaBridge", "LuaBridgeRequest", {seq, code, maxDepth, maxItems}))`); the mod's engine-side `handleEvent` hook evaluates it with the same evaluator the GUI uses and stores the answer under `responses[seq]` in the game script's shared state (the `GAME_SCRIPT` ECS component of `lua_bridge::/lua_bridge/bridge.gs`); each GUI frame the mod reads that state (about 17 us), replies with the request's `context`, and sends a `LuaBridgeAck` event so the engine deletes the stored answer. Facts that shape it:
+
+- Event subscriptions are by event NAME (`state:subscribeToEvent("LuaBridgeRequest")`, done by every engine state from its `update` and `handleEvent` hooks); the id (`LuaBridge`) is only a label, and the first argument of `makeScriptingSendEventCmd` is `""` as in the base game.
+- Engine hooks receive `(userParams, state, ...)`; `state:get()`/`state:set()` is the shared table.
+- Round trip is about 440 ms (one simulation step plus handling). A request unanswered after 10 s fails with `engine_timeout`.
+- Results are capped at 256 KB (the shared state is saved with the game, so answers are acked and removed immediately); oversize results are retried at depth 2 and flagged `truncated`.
+- Which engine Lua state handles a request varies (the response carries `engineState`). Each state has its own environment and module caches, so variables set by one request are NOT reliably visible to the next, and a mod's module-level variables may exist in several copies. Eval in all states or in states holding a given module is not implemented.
+- The engine environment honours the same `evalAccess` setting as the GUI one.
+
+## Security
+
+While the mod is enabled, any program running as the user that can write to the bridge folder can run Lua in the game and, with Full access (or by escaping the restricted environment), that code is not limited. Enable it only while developing.
+

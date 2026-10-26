@@ -1,0 +1,8 @@
+{
+	"en": {
+		"param_evalAccess_name": "Lua access for requests",
+		"param_evalAccess_tooltip": "Restricted hides require, io, os.getenv, load and debug from code sent by the bridge client (best effort, not a security boundary). Full removes these restrictions. Any program that can write to the bridge folder in your TEMP directory can run Lua in your game while this mod is active.",
+		"param_restricted": "Restricted",
+		"param_full": "Full"
+	}
+}
